@@ -10,13 +10,12 @@ const jwt = require('jsonwebtoken');
 const app = express();
 
 // --- CẤU HÌNH BIẾN MÔI TRƯỜNG ---
-// Khi chạy local thì dùng localhost, lên Vercel thì lấy từ biến môi trường
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 
 // --- CẤU HÌNH CORS ---
 app.use(cors({
-    origin: FRONTEND_URL, // Chỉ cho phép Frontend này gọi
+    origin: FRONTEND_URL, 
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 }));
@@ -24,8 +23,7 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// --- KẾT NỐI MONGODB (Tối ưu cho Serverless) ---
-// Giúp tránh lỗi tạo quá nhiều kết nối mỗi lần gọi API
+// --- KẾT NỐI MONGODB ---
 let isConnected = false;
 const connectDB = async () => {
     if (isConnected) return;
@@ -37,7 +35,6 @@ const connectDB = async () => {
         console.error('❌ Lỗi kết nối MongoDB:', err);
     }
 };
-// Gọi kết nối ngay
 connectDB();
 
 // --- SCHEMA USER ---
@@ -48,18 +45,16 @@ const userSchema = new mongoose.Schema({
     avatar: String,
     role: { type: String, default: 'user' }
 });
-// Kiểm tra xem model đã tồn tại chưa để tránh lỗi OverwriteModelError khi hot-reload
 const User = mongoose.models.User || mongoose.model('User', userSchema);
 
 // --- CẤU HÌNH PASSPORT ---
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    // Callback URL phải động theo môi trường (Local hoặc Vercel)
     callbackURL: `${BACKEND_URL}/auth/google/callback`,
 }, async (accessToken, refreshToken, profile, done) => {
     try {
-        await connectDB(); // Đảm bảo DB đã kết nối
+        await connectDB();
         let user = await User.findOne({ googleId: profile.id });
         if (!user) {
             user = await User.create({
@@ -84,32 +79,44 @@ passport.deserializeUser(async (id, done) => {
 });
 
 // Middleware Session
-// Lưu ý: Trên Vercel miễn phí, session lưu trong memory sẽ mất sau mỗi request.
-// Tuy nhiên với flow Login Google -> Redirect ngay lập tức thì vẫn tạm ổn.
 app.use(session({
     secret: process.env.SESSION_SECRET || 'secret_key',
     resave: false,
     saveUninitialized: false,
     cookie: { 
-        secure: process.env.NODE_ENV === 'production', // True nếu chạy https (vercel)
+        secure: process.env.NODE_ENV === 'production',
         maxAge: 60000 
     }
 }));
 app.use(passport.initialize());
 app.use(passport.session());
 
+// --- MIDDLEWARE CHECK TOKEN (Để bảo vệ API User) ---
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (!token) return res.status(401).json({ message: 'Thiếu Token' });
+
+    jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key', (err, user) => {
+        if (err) return res.status(403).json({ message: 'Token không hợp lệ' });
+        req.user = user;
+        next();
+    });
+};
+
 // --- ROUTES ---
 
+// 1. Route Trang chủ (Để test server sống hay chết)
 app.get('/', (req, res) => {
-    res.send("Backend API is running!");
+    res.send("<h1>Backend đang chạy ngon lành! 🚀</h1>");
 });
 
-// 1. Route bắt đầu Login bằng Google
+// 2. Login Google
 app.get('/auth/google',
     passport.authenticate('google', { scope: ['profile', 'email'] })
 );
 
-// 2. Route Callback
+// 3. Callback Google
 app.get('/auth/google/callback',
     passport.authenticate('google', { failureRedirect: '/' }),
     (req, res) => {
@@ -119,30 +126,36 @@ app.get('/auth/google/callback',
             process.env.JWT_SECRET || 'your_jwt_secret_key',
             { expiresIn: '1d' }
         );
-
-        // Redirect về Frontend kèm token
+        // Redirect về Frontend
         res.redirect(`${FRONTEND_URL}/auth/google-success?token=${token}&role=${user.role}`);
     }
 );
-app.get('/', (req, res) => {
-    res.send("<h1>Backend đang chạy ngon lành! 🚀</h1>");
+
+// 4. API Lấy thông tin User (Frontend gọi cái này)
+app.get('/api/user', authenticateToken, async (req, res) => {
+    try {
+        await connectDB();
+        const user = await User.findById(req.user.userId);
+        if (!user) return res.status(404).json({ message: 'User không tồn tại' });
+        res.json(user);
+    } catch (error) {
+        res.status(500).json({ message: 'Lỗi server' });
+    }
 });
-// API Login thường
+
+// 5. API Login thường (Placeholder)
 app.post('/api/login', async (req, res) => {
     await connectDB();
-    // Logic login của bạn...
     res.json({ message: "Login endpoint" });
 });
 
-// --- QUAN TRỌNG: CẤU HÌNH CHO VERCEL ---
-// Export app để Vercel sử dụng
+// --- CẤU HÌNH VERCEL (QUAN TRỌNG) ---
 module.exports = app;
 
-
-// Chỉ chạy app.listen khi ở môi trường local (development)
-if (process.env.NODE_ENV !== 'production') {
+// Chỉ chạy Local
+if (require.main === module) {
     const PORT = process.env.PORT || 8000;
     app.listen(PORT, () => {
-        console.log(`🚀 Server backend đang chạy tại: http://localhost:${PORT}`);
+        console.log(`🚀 Server đang chạy local tại port ${PORT}`);
     });
 }
