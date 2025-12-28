@@ -52,7 +52,11 @@ passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     callbackURL: `${BACKEND_URL}/auth/google/callback`,
-}, async (accessToken, refreshToken, profile, done) => {
+    passReqToCallback: true, // Thêm dòng này cho chắc
+    proxy: true,             // QUAN TRỌNG: Bắt buộc có trên Vercel để nhận diện HTTPS
+    scope: ['profile', 'email'] // QUAN TRỌNG: Khai báo scope ngay tại đây luôn
+}, async (req, accessToken, refreshToken, profile, done) => { 
+    // Lưu ý: Có thêm tham số 'req' ở đầu do dòng passReqToCallback: true
     try {
         await connectDB();
         let user = await User.findOne({ googleId: profile.id });
