@@ -124,7 +124,9 @@ app.get('/auth/google/callback',
         res.redirect(`${FRONTEND_URL}/auth/google-success?token=${token}&role=${user.role}`);
     }
 );
-
+app.get('/', (req, res) => {
+    res.send("<h1>Backend đang chạy ngon lành! 🚀</h1>");
+});
 // API Login thường
 app.post('/api/login', async (req, res) => {
     await connectDB();
@@ -135,6 +137,7 @@ app.post('/api/login', async (req, res) => {
 // --- QUAN TRỌNG: CẤU HÌNH CHO VERCEL ---
 // Export app để Vercel sử dụng
 module.exports = app;
+
 
 // Chỉ chạy app.listen khi ở môi trường local (development)
 if (process.env.NODE_ENV !== 'production') {
