@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Đăng ký</title>
+</head>
+<body>
+  <h2>Đăng ký</h2>
+  <form action="/register" method="POST">
+    <label>Email:</label><br>
+    <input type="email" name="email" required><br>
+    <label>Mật khẩu:</label><br>
+    <input type="password" name="password" required><br>
+    <button type="submit">Đăng ký</button>
+  </form>
+  <hr>
+  <form action="/auth/google" method="GET">
+    <button type="submit" style="background:#4285F4;color:#fff;padding:8px 16px;border:none;border-radius:4px;">Đăng nhập bằng Google</button>
+  </form>
+  <p>Đã có tài khoản? <a href="login.html">Đăng nhập</a></p>
+</body>
+</html>
